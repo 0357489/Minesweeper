@@ -86,6 +86,7 @@
     var backgroundmusic = new Audio("bensound-deepblue.mp3")
     backgroundmusic.loop = true
     var muted = false
+    var explosionsound = new Audio("Explosion.wav")
     /*Key:
     "*" = mine
     "#" = unknown
@@ -184,6 +185,9 @@
         deathx = movex
         deathy = movey
         loseanimate()
+        if (muted == false) {
+          explosionsound.play()
+        }
         //if it's a zero expose adjacent(not inc. diagonals) zeros and zeros adjacent(not inc. diagonals) to that one and so on
         //it then exposes everything adjacent(with diagonals) to the boarder
       } else if (globalboard[movey][movex] == "0") {
