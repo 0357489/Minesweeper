@@ -37,10 +37,14 @@
     const backcolour2 = "rgb(158,175,38)"
     const backcolour3 = "rgb(201,200,200)"
     const flagcolour = "rgb(245,191,66)"
-    const textcolour = "rgb(1,0,0)"
     const boardercolour = "rgb(49,91,126)"
     const explosioncolour1 = "rgb(252, 119, 3)"
     const explosioncolour2 = "rgb(156, 45, 65)"
+    const textcolour1 = "rgb(0, 162, 255)"
+    const textcolour2 = "rgb(23,76,111)"
+    const textcolour3 = "rgb(50, 168, 131)"
+    const textcolour4 = "rgb(252, 119, 3)"
+    const textcolour5 = "rgb(133, 41, 93)"
     var triedtoresize = false
     var globalboard = generateboard("0")
     var currentknown = generateboard("#")
@@ -282,7 +286,18 @@
             ctx.fillStyle = backcolour3
             ctx.fillRect((j + 1) * 32, (i + 1) * 32, 32, 32)
             ctx.textAlign = "center"
-            ctx.fillStyle = textcolour
+            if (Number(currentknown[i][j]) == 1) {
+              ctx.fillStyle = textcolour1
+            }else if (Number(currentknown[i][j]) == 2) {
+              ctx.fillStyle = textcolour2
+            }else if (Number(currentknown[i][j]) == 3) {
+              ctx.fillStyle = textcolour3
+            }else if (Number(currentknown[i][j]) == 4) {
+              ctx.fillStyle = textcolour4
+            }else if (Number(currentknown[i][j]) >= 5) {
+              ctx.fillStyle = textcolour5
+            }
+
             ctx.fillText(currentknown[i][j], (j + 1.5) * 32, (i + 1.5) * 32)
             //if it's a 0 draw plain square
           } else if (currentknown[i][j] == "0") {
