@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Minesweeper</title>
+  <link rel="icon" href="Minesweeper icon.png">
+</head>
+
+<body bgcolor = "#315B7E">
+  <style type="text/css" media="screen">
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: 'grey';
+    }
+  </style>
+  <canvas id="myCanvas" width="200" height="100" style="background-color:seagreen">\
+    Your browser does not support the canvas element.
+  </canvas>
+  <script>
+    //defining variables
+    var canvas = document.getElementById("myCanvas");
+    var ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    var height = window.innerHeight;
+    var width = window.innerWidth;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, w, h);
+    var outcome = ""
+    var h = Math.floor(height / 32) - 2
+    var w = Math.floor(width / 32) - 2
+    var nomines = Math.floor((h * w) / 7)
+    const backcolour1 = "rgb(148,164,36)"
+    const backcolour2 = "rgb(158,175,38)"
+    const backcolour3 = "rgb(201,200,200)"
+    const flagcolour = "rgb(245,191,66)"
+    const textcolour = "rgb(1,0,0)"
+    const boardercolour = "rgb(49,91,126)"
+    const explosioncolour1 = "rgb(252, 119, 3)"
+    const explosioncolour2 = "rgb(156, 45, 65)"
+    var triedtoresize = false
+    var globalboard = generateboard("0")
+    var currentknown = generateboard("#")
+    var turn = 0
+    var animatestep = 0
+    var wintime = 120
+    var lossspeed = 9
+    var circledif = 10
+    var numbercircles = 20
+    var fadeintime = 180 * lossspeed
+    var circles = []
+    var finalstep
+    var starty
+    var startx
+    var deathx
+    var deathy
+    var mineboarder = h / 8
+    if (w / 8 < mineboarder) {
+      mineboarder = w / 8
+    }
+    if (mineboarder > 4) {
+      mineboarder = 4
+    }
+    var startingtime = 0
+    var winningtime = 0
+    var time
+    var lowscore = 1000
+    var started = false
+    //checks if browser supports localStorage
+    if (typeof(Storage) !== "undefined") {
+      //if it does try to load highscores item
+      lowscore = localStorage.getItem("lowscores");
+      //if it is not there set highscore to 0
+      if (lowscore == null) {
+        lowscore = 1000
+      }
+    }
+    //set up music
+    var backgroundmusic = new Audio("bensound-deepblue.mp3")
+    backgroundmusic.loop = true
+    var muted = false
+    /*Key:
+    "*" = mine
+    "#" = unknown
+    "!" = marker
+    "(number)" = number of mines adjacent to tile
+    */
+
+    //Rules of Minesweeper board generation:
+    //1. It must be possible to complete without guessing or knowing number of mines
+    //thats all of them, but it means that the program must be able to complete Minesweeper to generate a random board each time
+
+
+    //chance of a board being possible after 15 cycles is 59.3% based on a trial of 1000 random 28 by 36 boards with a starting position of 4,13
+    //To check a single board it takes 0.21827 seconds based ona trial of 100 random 28 by 36 boards with a starting position of 4, 13
+    //therefore to have a 99.9% chance of finding a possible board you only need to check 7.68432 boards taking 1.68 seconds (2dp)
+    //to have a 99.999999% chance of finding a possible board you need only check 20.4915 boards taking 4.47 seconds (2dp)
+    //to have a 99.99999999999999999999999% chance of finding a possible board you only need to check 64.036 boards 13.98 seconds (2dp)
+    //In a minute we can check 274.89 boards (2dp) to get a likelyhood of not finding a possible board of 0.407^274.89 or 4.8 * 10^-108 which is a very small number
+    //If you duplicated Earth and each atom was a computor spending a minute looking for possible boards you would expect only one to not find a possible board.
+    //assumeing earth has 10^50 atoms
+
+
+
+    //a function which generates a board filled with fill
+    function generateboard(fill) {
+      var row = []
+      var result = []
+      //loops through rows
+      for (var a = 0; a < h; a++) {
+        result.push([])
+        //loops through coloums in row
+        for (var b = 0; b < w; b++) {
+          result[a].push(fill)
+        }
+      }
+      //returns filled board
+      return result
+    }
+    //will place mines randomly avoiding the startx and starty and generates numbers
+    function placemines() {
+      var minesplaced = 0
+      //places mines randomly on board avoiding startx and starty
+      //acuttual amount of mines will be equal or less than nomines
+      for (var c = 0; c < nomines; c++) {
+        var minex = Math.floor(Math.random() * w)
+        var miney = Math.floor(Math.random() * h)
+        if (minex < startx - mineboarder || minex > startx + mineboarder && miney < starty - mineboarder || miney > starty + mineboarder) {
+          globalboard[miney][minex] = "*"
+          minesplaced++
+        }
+      }
+      //generates numbers
+      //loops through rows
+      for (var d = 0; d < h; d++) {
+        //loops through coloums in row
+        for (var e = 0; e < w; e++) {
+          //checks if location is mine
+          if (globalboard[d][e] != "*") {
+            var countm = 0
+            //loops through adjacent positions
+            for (var f = -1; f < 2; f++) {
+              for (var g = -1; g < 2; g++) {
+                //checks it's not checking out of the arrays
+                if ((f + d) >= 0 && (f + d) < h && (g + e) >= 0 && (g + e) < w) {
+                  //acctually count the amount of mines
+                  if (globalboard[(f + d)][(g + e)] == "*") {
+                    countm++
+                  }
+                }
+              }
+            }
+            //value then stored as string
+            globalboard[d][e] = countm.toString()
+          }
+        }
+      }
+      //makes sure at least one mine is placed
+      if (minesplaced == 0) {
+        minex = Math.floor(Math.random() * w)
+        miney = Math.floor(Math.random() * h)
+        while (minex == startx || miney == starty || miney == starty - 1 || miney == starty + 1 || minex == startx + 1 || minex == startx - 1) {
+          minex = Math.floor(Math.random() * w)
+          miney = Math.floor(Math.random() * h)
+        }
+        globalboard[miney][minex] = "*"
+      }
+    }
+    //makes alterations requrired when a player moves also draws board
+    function move(movex, movey) {
+      //if movex, movey a number expose number
+      if (globalboard[movey][movex] != "0" && globalboard[movey][movex] != "*") {
+        currentknown[movey][movex] = globalboard[movey][movex]
+        //if movex, movey a mine set outcome and play death animation
+      } else if (globalboard[movey][movex] == "*") {
+        outcome = "lose"
+        deathx = movex
+        deathy = movey
+        loseanimate()
+        //if it's a zero expose adjacent(not inc. diagonals) zeros and zeros adjacent(not inc. diagonals) to that one and so on
+        //it then exposes everything adjacent(with diagonals) to the boarder
+      } else if (globalboard[movey][movex] == "0") {
+        currentknown[movey][movex] = globalboard[movey][movex]
+        discoverad(movex, movey)
+        discoveredges()
+      }
+      //draws the board
+      drawboard()
+    }
+    //discovers adjacent 0's to a point and adjacent 0's to that and so on
+    function discoverad(pointx, pointy) {
+      var test = true
+      //checks it's not looking outside arrays
+      if (pointy - 1 >= 0 && pointy - 1 <= h - 1) {
+        //looks above for a 0 which hasn't been exposed yet
+        if (globalboard[pointy - 1][pointx] == "0" && currentknown[pointy - 1][pointx] == "#") {
+          currentknown[pointy - 1][pointx] = globalboard[pointy - 1][pointx]
+          test = false
+          discoverad(pointx, pointy - 1)
+        }
+      }
+      //checks it's not looking outside arrays
+      if (pointy + 1 >= 0 && pointy + 1 <= h - 1) {
+        //looks below for a 0 which hasn't been exposed yet
+        if (globalboard[pointy + 1][pointx] == "0" && currentknown[pointy + 1][pointx] == "#") {
+          currentknown[pointy + 1][pointx] = globalboard[pointy + 1][pointx]
+          test = false
+          discoverad(pointx, pointy + 1)
+        }
+      }
+      //checks it's not looking outside arrays
+      if (pointx - 1 >= 0 && pointx - 1 <= w - 1) {
+        //looks left for a 0 which hasn't been exposed yet
+        if (globalboard[pointy][pointx - 1] == "0" && currentknown[pointy][pointx - 1] == "#") {
+          currentknown[pointy][pointx - 1] = globalboard[pointy][pointx - 1]
+          test = false
+          discoverad(pointx - 1, pointy)
+        }
+      }
+      //checks it's not looking outside arrays
+      if (pointx + 1 >= 0 && pointx + 1 <= w - 1) {
+        //looks right for a 0 which hasn't been exposed yet
+        if (globalboard[pointy][pointx + 1] == "0" && currentknown[pointy][pointx + 1] == "#") {
+          currentknown[pointy][pointx + 1] = globalboard[pointy][pointx + 1]
+          test = false
+          discoverad(pointx + 1, pointy)
+        }
+      }
+    }
+    //discovers the edges of a 'sea' of 0's
+    function discoveredges() {
+      //loops through rows
+      for (var p = 0; p < h; p++) {
+        //loops through coloums in row
+        for (var q = 0; q < w; q++) {
+          //if it's a zero expose al adjacent(with diagonals)
+          if (currentknown[p][q] == "0") {
+            for (var n = -1; n < 2; n++) {
+              for (var o = -1; o < 2; o++) {
+                //checks it's not looking outside arrays
+                if (p + o >= 0 && p + o < h && q + n >= 0 && q + n < w) {
+                  //checks it's not flaged
+                  if (currentknown[p + o][q + n] != "!") {
+                    //exposes it
+                    currentknown[p + o][q + n] = globalboard[p + o][q + n]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    //draws the currentknown gameboard
+    function drawboard() {
+      //draws boarder
+      ctx.fillStyle = boardercolour
+      ctx.fillRect(0, 0, width, height)
+      //sets up font for later use
+      ctx.font = 12 + "px Impact"
+      //loops through rows
+      for (var i = 0; i < h; i++) {
+        //loops through coloums in row
+        for (var j = 0; j < w; j++) {
+          //if it's unkown draw square with alternating clours
+          if (currentknown[i][j] == "#") {
+            if ((i + j) % 2 == 0) {
+              ctx.fillStyle = backcolour1
+            } else {
+              ctx.fillStyle = backcolour2
+            }
+            ctx.fillRect((j + 1) * 32, (i + 1) * 32, 32, 32)
+            //if it's a flag colour yellow
+          } else if (currentknown[i][j] == "!") {
+            ctx.fillStyle = flagcolour
+            ctx.fillRect((j + 1) * 32, (i + 1) * 32, 32, 32)
+            //if it's a number draw number
+          } else if (currentknown[i][j] != "0") {
+            ctx.fillStyle = backcolour3
+            ctx.fillRect((j + 1) * 32, (i + 1) * 32, 32, 32)
+            ctx.textAlign = "center"
+            ctx.fillStyle = textcolour
+            ctx.fillText(currentknown[i][j], (j + 1.5) * 32, (i + 1.5) * 32)
+            //if it's a 0 draw plain square
+          } else if (currentknown[i][j] == "0") {
+            ctx.fillStyle = backcolour3
+            ctx.fillRect((j + 1) * 32, (i + 1) * 32, 32, 32)
+          }
+        }
+      }
+      ctx.fillStyle = backcolour3
+      ctx.font = height%32 + "px Impact"
+      ctx.textAlign = "right"
+      console.log(width-100,(height%32)/2-100)
+      ctx.fillText("Music: www.bensound.com",width-10,height-(height%32)/2)
+    }
+    //finds mine in a 3x3 grid with squrex, squarey in the center using only currentknown
+    //works on the principle that if the number of unkowns + the number of flags == the value of the square then
+    //all the unkowns and flags are mines
+    function findmine(squarex, squarey) {
+      var found = false
+      var unknowns = []
+      //loops through each adjacent(inc. diagonals) squares to find flags and unkowns
+      for (var k = -1; k < 2; k++) {
+        for (var l = -1; l < 2; l++) {
+          //checks it's not looking otuside arrays
+          if (l + squarey >= 0 && l + squarey < h && k + squarex >= 0 && k + squarex < w) {
+            //if it's an unkown or flag add to array unkowns
+            if (currentknown[l + squarey][k + squarex] == "#" || currentknown[l + squarey][k + squarex] == "!") {
+              unknowns.push([k + squarex, l + squarey])
+            }
+          }
+        }
+      }
+      //if the number of flags and unkown squares == value of square
+      if (Number(currentknown[squarey][squarex]) == unknowns.length) {
+        //set every flag and unkown to a flag
+        for (var m = 0; m < unknowns.length; m++) {
+          currentknown[unknowns[m][1]][unknowns[m][0]] = "!"
+          found = true
+        }
+      }
+      //return whether it found a falg or not
+      return found
+    }
+    //finds safe squares in a 3x3 grid centerd on gridx, gridy using only unknowns
+    //works on the principle that if the number of flags surrounding a square equal to the value of the squares
+    //then all non-flag squares are safe
+    function issurroundingsafe(gridx, gridy) {
+      var countflags = 0
+      var nsuroundingmines = Number(currentknown[gridy][gridx])
+      var hidden = []
+      //loops through adjacent squares(inc. diagonals)
+      for (var r = -1; r < 2; r++) {
+        for (var s = -1; s < 2; s++) {
+          //checks it's not looking outside arrays
+          if (gridy + s >= 0 && gridy + s < h && gridx + r >= 0 && gridx + r < w) {
+            //if it's a flag count it
+            if (currentknown[gridy + s][gridx + r] == "!") {
+              countflags++
+              //if it's unkown add it's co-ordodinates to the hidden array
+            } else if (currentknown[gridy + s][gridx + r] == "#") {
+              hidden.push([gridx + r, gridy + s])
+            }
+          }
+        }
+      }
+      //return false if it found nothing safe otherwise return all safe squares
+      if (countflags == nsuroundingmines) {
+        return hidden
+      } else {
+        return false
+      }
+    }
+    drawboard()
+    function drawstart(){
+      ctx.fillStyle = boardercolour
+      ctx.fillRect(width/2-height/4,height/2-height/6,height/2,height/5)
+      ctx.fillStyle = backcolour3
+      ctx.font = height/5 + "px Impact"
+      ctx.textAlign = "center"
+      ctx.fillText("Start",width/2,height/2)
+    }
+    drawstart()
+    //computor simulates a human to discover whether board possible or not
+    function makemove() {
+      //loops through each rows
+      for (var t = 0; t < h; t++) {
+        //loops through each coloum in row
+        for (var u = 0; u < w; u++) {
+          //if it's a number then:
+          if (currentknown[t][u] != "#" || currentknown[t][u] != "!" || currentknown[t][u] != "0") {
+            //find mines and flag them if it can
+            findmine(u, t)
+            //and move if their are any safe squares
+            var iss = issurroundingsafe(u, t)
+            if (iss != false) {
+              for (var v = 0; v < iss.length; v++) {
+                move(iss[v][0], iss[v][1])
+              }
+            }
+          }
+        }
+      }
+    }
+    //cehcks if the player is finished
+    function checkfinished() {
+      var completed = true
+      //loops through rows
+      for (var y = 0; y < h; y++) {
+        //loops through each coloumn in row
+        for (var x = 0; x < w; x++) {
+          //if it's unknown it's not complete
+          if (currentknown[y][x] == "#") {
+            completed = false
+            return false
+          }
+          //if it's falged incorrectly then it's not complete
+          if (currentknown[y][x] == "!" && globalboard[y][x] != "*") {
+            completed = false
+            return false
+          }
+        }
+      }
+      //retrun if the player is finished or not
+      return completed
+    }
+    //checks if a board it possible
+    function ispossible() {
+      //start in same position as the player
+      move(startx, starty)
+      var cycle = 0
+      //will make up to 15 cycles of the board to try and solve
+      while (!(checkfinished()) && cycle < 15) {
+        makemove()
+        cycle++
+      }
+      //return if the board is possibel or not
+      return checkfinished()
+
+    }
+    //chose board for the player to play on
+    function choseboard() {
+      //it first saves any flags the player has marked
+      var origonalknown = []
+      //loops through rows
+      for (var y = 0; y < h; y++) {
+        //loops through each column in that row
+        for (var x = 0; x < w; x++) {
+          //if it's a flag save it's co-ordodinates in an array
+          if (currentknown[y][x] == "!") {
+            origonalknown.push([x, y])
+          }
+        }
+      }
+      //generates boards and places mines
+      globalboard = generateboard("0")
+      placemines()
+      currentknown = generateboard("#")
+      //will keep generating boards until it find one that is possible
+      while (ispossible() == false) {
+        globalboard = generateboard("0")
+        placemines()
+        currentknown = generateboard("#")
+      }
+      //reset the currentknown so nothing is known
+      currentknown = generateboard("#")
+      //re-mark the flags which were saved earlier
+      for (var z = 0; z < origonalknown.length; z++) {
+        currentknown[origonalknown[z][1]][origonalknown[z][0]] = "!"
+      }
+      //draw the board
+      drawboard()
+      //start timer:
+      startingtime = Date.now()
+    }
+    //will run when the player clicks
+    window.addEventListener("click", function(e) {
+      if (started) {
+        //converts the x and y co-ordodinates into easyer to manipulate forms
+        var clickx = Math.floor((e.x - 32) / 32)
+        var clicky = Math.floor((e.y - 32) / 32)
+        //checks that the click inside arrays
+        if (clickx < w && clicky < h) {
+          //if the shift key pressed on either a unkown or flag and outcome undecide then:
+          if (e.shiftKey && (currentknown[clicky][clickx] == "#" || currentknown[clicky][clickx] == "!") && outcome == "") {
+            //reverse the state of clicked square, check if they won and then draw the board
+            if (currentknown[clicky][clickx] == "#") {
+              currentknown[clicky][clickx] = "!"
+              if (checkfinished() && outcome == "") {
+                outcome = "win"
+                winningtime = Date.now()
+                winanimate()
+              }
+              drawboard()
+            } else {
+              currentknown[clicky][clickx] = "#"
+              if (checkfinished() && outcome == "") {
+                outcome = "win"
+                winningtime = Date.now()
+                winanimate()
+              }
+              drawboard()
+            }
+            //if the shift key not pressed and they clicked on an unkown and the outcome undecided then:
+          } else if (currentknown[clicky][clickx] == "#" && outcome == "") {
+            //generate board if turn is 0
+            if (turn == 0) {
+              startx = clickx
+              starty = clicky
+              choseboard()
+            }
+            //move in desired location
+            move(clickx, clicky)
+            turn++
+            //check for a win
+            if (checkfinished() && outcome == "") {
+              outcome = "win"
+              winningtime = Date.now()
+              winanimate()
+            }
+          }
+        }
+        //if the outcome is decided
+        if (outcome != "") {
+          //and the animation is finished
+          if (outcome == "win" && animatestep > wintime) {
+            //reset game
+            reset()
+          } else if (outcome == "lose" && (animatestep - finalstep) / fadeintime > 1) {
+            //reset game
+            reset()
+          }
+        }
+      }else{
+        started = true
+        drawboard()
+        backgroundmusic.play()
+      }
+    })
+    //runs when player presses button on keyboard
+    window.addEventListener("keydown", function(e) {
+      //if outcome is decided
+      if (outcome != "") {
+        //and animation has finished
+        if (outcome == "win" && animatestep > wintime) {
+          //reset game
+          reset()
+        } else if (outcome == "lose" && (animatestep - finalstep) / fadeintime > 1) {
+          //reset game
+          reset()
+        }
+      }
+      if (e.keyCode == 77) {
+        if(muted == false){
+          backgroundmusic.pause()
+          muted = true
+        }else {
+          muted = false
+          backgroundmusic.play()
+        }
+      }
+    })
+    window.addEventListener("resize", function(e) {
+      if (triedtoresize == false) {
+        if (window.confirm("To Resize your game you must forgo your current progress")) {
+          location.reload()
+        }
+        triedtoresize = true
+      }
+    })
+    //a function which counts mines
+    function countmines() {
+      var numberofmines = 0
+      //loops through each row
+      for (var ad = 0; ad < h; ad++) {
+        //loops through each coloumn in row
+        for (var ae = 0; ae < w; ae++) {
+          //if it's a mine count it
+          if (globalboard[ad][ae] == "*") {
+            numberofmines++
+          }
+        }
+      }
+      //returns number of mines
+      return numberofmines
+    }
+    //a function which converts rgb into rgba
+    var converttorgba = function(colour, alpha) {
+      result4 = "rgba(" + colour.slice(4, colour.indexOf(",")) + "," + colour.slice((colour.indexOf(",") + 1), colour.lastIndexOf(",")) + "," + colour.slice((colour.lastIndexOf(",") + 1), -1) + "," + alpha + ")"
+      return result4
+    }
+    //does the win animation
+    function winanimate() {
+      //draws the board
+      drawboard()
+      //draws semi-transparent background
+      ctx.fillStyle = converttorgba(boardercolour, (animatestep / wintime))
+      ctx.fillRect(0, 0, width, height)
+      //draws semi-transparent text
+      ctx.fillStyle = converttorgba(backcolour3, (animatestep / wintime))
+      ctx.textAlign = "center"
+      ctx.font = Math.floor(h * 10) + "px Impact"
+      ctx.fillText("You Win", width / 2, height / 2)
+      ctx.font = Math.floor(h * 4) + "px Impact"
+      //finds time per mine discovered to 3 decimal places
+      time = Math.floor((((winningtime - startingtime) / 1000) / countmines()) * 1000) / 1000
+      ctx.fillText(time.toString() + " Seconds per mine", width / 2, (height / 2) + h * 6)
+      //If it's a new lowscore then inform usser
+      if (time <= lowscore) {
+        ctx.fillText("New Highscore!", width / 2, (height / 2) + h * 12)
+        //and save new highscore to local storage
+        localStorage.setItem("lowscores", time)
+        //and set lowscore to time
+        lowscore = time
+        //if they haven't got a new highscore
+      } else {
+        //tell user their old highscore
+        ctx.font = Math.floor(h * 2) + "px Impact"
+        ctx.fillText("Highscore stays at " + lowscore + " seconds per mine", width / 2, (height / 2) + h * 12)
+      }
+      animatestep++
+      //makes an animation frame
+      var wid = requestAnimationFrame(winanimate)
+      //cancels animation frame when animation ended
+      if (animatestep > wintime) {
+        cancelAnimationFrame(wid)
+      }
+    }
+    //does the loss animation
+    function loseanimate() {
+      //drawsboard
+      drawboard()
+      //if the smallest circle is smaller than the diagonal length of screen and all circles have been made:
+      if (((Math.sqrt((width * width) + (height * height))) + circledif * 2) > circles[circles.length - 1] || circles.length != numbercircles) {
+        //if circledif frames have passed since last circle created and the number of circles less than max number possible make new circle
+        if (Math.floor(animatestep / lossspeed) % circledif == 0 && circles.length < numbercircles) {
+          circles.push(0)
+        }
+        //loops through each circle in the circles arrray
+        for (var ac = 0; ac < circles.length; ac++) {
+          //makes circles bigger
+          circles[ac] += lossspeed
+          //if the circle is even
+          if ((ac) % 2 == 0) {
+            //draw with one colour
+            ctx.beginPath()
+            ctx.fillStyle = explosioncolour1
+            ctx.arc((deathx + 1) * 32, (deathy + 1) * 32, circles[ac], 0, Math.PI * 2)
+            ctx.fill()
+            //otherwise
+          } else {
+            //draw in another colour
+            ctx.beginPath()
+            ctx.fillStyle = explosioncolour2
+            ctx.arc((deathx + 1) * 32, (deathy + 1) * 32, circles[ac], 0, Math.PI * 2)
+            ctx.fill()
+          }
+          //sets the final animation step
+          finalstep = animatestep
+
+
+        }
+        //if smallest circle bigger than screen:
+      } else {
+        //set the colour to the colour of the smallest circle
+        if (numbercircles % 2 == 0) {
+          ctx.fillStyle = explosioncolour2
+        } else {
+          ctx.fillStyle = explosioncolour1
+        }
+        //draws background
+        ctx.fillRect(0, 0, width, height)
+        //in the oposite colour and increasing opacity
+        if (numbercircles % 2 == 0) {
+          ctx.fillStyle = converttorgba(explosioncolour1, (animatestep - finalstep) / fadeintime)
+        } else {
+          ctx.fillStyle = converttorgba(explosioncolour2, (animatestep - finalstep) / fadeintime)
+        }
+        //draw loss message
+        ctx.textAlign = "center"
+        ctx.font = Math.floor(h * 5) + "px Impact"
+        ctx.fillText("You Lose", width / 2, height / 2)
+      }
+      //increases animation step
+      animatestep += lossspeed
+      //makes animation frame
+      var lid = requestAnimationFrame(loseanimate)
+      // if the animation is done cancel animation frame
+      if ((animatestep - finalstep) / fadeintime > 1) {
+        cancelAnimationFrame(lid)
+      }
+    }
+    // resets the game
+    function reset() {
+      //resets the important variables
+      animatestep = 0
+      circles = []
+      outcome = ""
+      turn = 0
+      globalboard = generateboard("0")
+      startingtime = 0
+      currentknown = generateboard("#")
+      drawboard()
+    }
+  </script>
+</body>
+
+</html>
